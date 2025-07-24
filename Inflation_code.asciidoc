@@ -1,0 +1,660 @@
++*In[1]:*+
+[source, ipython3]
+----
+"""Librerías a utilizar en el código"""
+#import oscode as pyoscode
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+from astropy import units as u
+from scipy.interpolate import interp1d
+from scipy.integrate import simps
+import csv
+import pandas as pd
+----
+
+
++*In[2]:*+
+[source, ipython3]
+----
+# En la definición del potencial se han incluido 5 parámetros V(phi,beta,phi_step,delta,nv)
+
+"""Step potencial"""
+def V(phi,beta,phi_step,delta,nv):
+    """ inflationary potential"""
+    return 0.5*m**2*phi**nv*(1 + beta*np.tanh((phi - phi_step)/delta))
+
+def dV(phi,beta,phi_step,delta,nv):
+    """ first derivative of the inflationary potential """
+    return 0.5*nv*m**2*phi**(nv-1)*(1 + beta*np.tanh((phi - phi_step)/delta))+ (0.5*m**2*beta*phi**nv/delta)*(np.cosh((phi - phi_step)/delta))**(-2)
+
+
+def ddV(phi,beta,phi_step,delta,nv):
+    """ second derivative of the inflationary potential """
+    t11=0.5*nv*(nv-1)*m**2*phi**(nv-2)*(1 + beta*np.tanh((phi - phi_step)/delta))
+                                        
+    t12=beta*nv*m**2*phi**(nv-1)/delta*(np.cosh((phi - phi_step)/delta))**(-2)
+                                        
+    t13=(beta*m**2*phi**nv/delta**2)*(np.tanh((phi - phi_step)/delta)*(np.cosh((phi - phi_step)/delta))**(-2))
+                                        
+    return t11+ t12-t13
+----
+
+
++*In[3]:*+
+[source, ipython3]
+----
+# parámetros del potencial 
+nv=2/3
+m = 1e-7
+beta=0.01
+M = 3e-3
+phi_step=7.55
+N_i = 1.
+N_f = 80.
+Nbg = 1000000
+N = np.linspace(N_i,N_f,Nbg)
+
+delta=np.linspace(0.02,0.3,4)
+print(delta)
+----
+
+
++*Out[3]:*+
+----
+[0.02       0.11333333 0.20666667 0.3       ]
+----
+
+
++*In[4]:*+
+[source, ipython3]
+----
+# Esta parte de código calcula las condiciones iniciales para las ecuaciones del fondo cosmológico
+
+
+phi_t=np.linspace(0.3,10,10000)
+
+pH23=np.zeros(shape=(len(phi_t),len(delta)),dtype=float,order='F' )
+pphin23=np.zeros(shape=(len(phi_t),len(delta)),dtype=float,order='F' )
+sol23=np.zeros(shape=(len(phi_t),len(delta)),dtype=float,order='F' )
+phi_i23=np.zeros(shape=(len(phi_t),len(delta)),dtype=float,order='F' )
+sol223=np.zeros(shape=(len(phi_t),len(delta)),dtype=float,order='F' )
+
+H_i=[]
+phi_i=[]
+phin_i=[]
+
+for j in range(len(delta)):
+    epsilon2=0.5*(dV(phi_t,beta,phi_step,delta[j],nv)/V(phi_t,beta,phi_step,delta[j],nv))**2
+    j_min=np.argmin(np.abs(1-epsilon2))
+
+    for t_a in range(len(phi_t)):
+        phi23=np.linspace(0.47,phi_t[t_a],1000)
+        epsilon1=0.5*(dV(phi23,beta,phi_step,delta[j],nv)/V(phi23,beta,phi_step,delta[j],nv))**2
+        
+        
+        def f(phi23):
+            return 1/(2*epsilon1)**0.5
+        y23=f(phi23)
+        I1 =simps(y23,phi23)
+        sol23[t_a][j]=I1
+        phi_i23[t_a][j]=phi_t[t_a]
+        pphin23[t_a][j]=epsilon1[-1]
+        pH23[t_a][j]=V(phi_t[t_a],beta,phi_step,delta[j],nv)
+        sol223[t_a][j]=(np.abs(60-I1)) 
+    t_i=np.argmin(sol223[:,j])
+    
+    N_totala=sol23[t_i][j]
+    phi23a_i=phi_i23[t_i][j]
+    psi23a_i=-(2*pphin23[t_i][j])**0.5
+    H23a_i=(pH23[t_i][j]/3)**0.5
+    
+    H_i.append(H23a_i)
+    phi_i.append(phi23a_i)
+    phin_i.append(psi23a_i)
+    
+
+    print("\n","condiciones para phi23 ","\n"," N=",N_totala,"\n"," phi=",phi23a_i,"\n"," phi_N=",psi23a_i,"\n"," H=",H23a_i)
+
+
+----
+
+
++*Out[4]:*+
+----
+
+ condiciones para phi23  
+  N= 60.00488609254315 
+  phi= 9.006620662066206 
+  phi_N= -0.07401962308399551 
+  H= 8.536352730268246e-08
+
+ condiciones para phi23  
+  N= 59.99543452956505 
+  phi= 9.074527452745274 
+  phi_N= -0.07346571710150566 
+  H= 8.55775274842654e-08
+
+ condiciones para phi23  
+  N= 60.00248172126302 
+  phi= 9.097809780978098 
+  phi_N= -0.07327776986554008 
+  H= 8.565065288262107e-08
+
+ condiciones para phi23  
+  N= 60.00188191431596 
+  phi= 9.10945094509451 
+  phi_N= -0.07318809879887136 
+  H= 8.568714328921325e-08
+----
+
+
++*In[6]:*+
+[source, ipython3]
+----
+name_delta=[r'$ \delta/{\rm M_pl}= 0.02$',r'$ \delta/{\rm M_pl}= 0.11$',r'$ \delta/{\rm M_pl}= 0.21$',r'$ \delta/{\rm M_pl}= 0.30$']
+name_delta2=[r'$ \delta= 0.02$',r'$ \delta = 0.11$',r'$ \delta = 0.21$',r'$ \delta = 0.3$']
+fig, ax = plt.subplots()
+
+ax.plot(phi_t,V(phi_t,beta,phi_step,delta[-1],nv), label=name_delta2[-1])
+ax.plot(phi_t,V(phi_t,0,phi_step,delta[1],nv),'k', label=r'$V_0$')
+ax.plot(phi_t,V(phi_t,0,phi_step,delta[1],nv)+(0.1*V(phi_t,0,phi_step,delta[1],nv)),':g', label=r'$V_0$')
+ax.plot(phi_t,V(phi_t,0,phi_step,delta[1],nv)-(0.1*V(phi_t,0,phi_step,delta[1],nv)),':b', label=r'$V_0$')
+
+ax.axvline(x=7.55, color='k', linestyle=':', label=r'$ \phi_{\rm step}=7.55$')
+plt.xlabel(r'$ \phi/{\rm M_{pl}}$')
+plt.ylabel(r'$ V(\phi)$')
+plt.legend(loc='upper left', prop={'size': 9})
+ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+plt.savefig('delta_potential.png',dpi=300)
+plt.show()
+----
+
+
++*Out[6]:*+
+----
+![png](output_4_0.png)
+----
+
+
++*In[7]:*+
+[source, ipython3]
+----
+fig, ax = plt.subplots()
+
+for j in range(len(delta)):
+    ax.plot(phi_t/phi_step,V(phi_t,beta,phi_step,delta[j],nv)/V(phi_t,0,phi_step,delta[1],nv), label=name_delta2[j])
+    #plt.plot(phi_t,V(phi_t,0,phi_step,delta[1],nv),'k')
+plt.xlabel(r'$ \phi/\phi_{\rm step}$')
+plt.ylabel(r'$ V/V_0$')
+plt.xlim(0.8,1.2)
+plt.legend(loc='upper left', prop={'size': 10})
+
+ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+plt.savefig('delta_potential2.png',dpi=300)
+plt.show(1)
+----
+
+
++*Out[7]:*+
+----
+![png](output_5_0.png)
+----
+
+
++*In[8]:*+
+[source, ipython3]
+----
+ks = np.exp(np.linspace(-8, 20, 2000) )
+scalar_spectrum=np.zeros(shape=(len(ks),len(delta)),dtype=float,order='F' )
+tensor_spectrum=np.zeros(shape=(len(ks),len(delta)),dtype=float,order='F' )
+
+df_heaH=["vstep1.txt","vstep2.txt","vstep3.txt","vstep4.txt"]
+df_hea1=["N","H","R","P","PN"]
+
+horiss=[]
+
+nombres=["$\phi_{step}=7.3$","$\phi_{step}=7.325$","$\phi_{step}=7.375$","$\phi_{step}=7.4$","$\phi_{step}=7.425$","$\phi_{step}=7.45$","$\phi_{step}=7.475$","$\phi_{step}=7.5$","$\phi_{step}=7.525$","$\phi_{step}=7.55$","$\phi_{step}=7.575$"]
+
+for j in range(len(delta)):
+    delta_j=delta[j]
+    
+    def bgeqs_JM(N, y):
+        """ System of equations describing the evolution of the cosmological background """
+        # dy define dy/dN
+    
+        dy = np.zeros(y.shape)
+    
+        H = y[0]  # Parámetro de Hubble
+        phi = y[1] # campo escalar
+        psi = y[2] 
+    
+        dy[0] = -0.5* H * psi**2.  # dy[0] erivada de H respecto a N
+        dy[1] = psi # primera derivada del campo escalar 
+        dy[2] = psi*(0.5*(psi**2.) - 3.) - H**(-2.)*dV(phi,beta,phi_step,delta_j,nv)  #dy[2] es la segunda derivada del campo escalar 
+    
+        return dy
+    
+    def endinfl_JM(N, y):
+        """ Crosses zero when inflation ends """
+        H = y[0] 
+        dH = bgeqs_JM(N, y)[0] # debuelve la derivada de H
+        epsilon = -dH/H  # Parámetros de slow-roll 
+        return epsilon - 1.
+    
+    y_i=np.array([H_i[j],phi_i[j],phin_i[j]])
+    
+    endinfl_JM.terminal = True
+    endinfl_JM.direction = 1
+    bgsol= solve_ivp(bgeqs_JM,  (N_i,N_f), y_i,  events=endinfl_JM,  t_eval=N, rtol=1e-8, atol=1e-10)
+    
+    print ('Resulst for phi23 sin paso: \n The number of efolds are: %0.1f \n The number of e-folds of inflatio: %0.1f'%(bgsol.t[-1],  bgsol.t_events[0][0] -N_i))
+    print(len(bgsol.t))
+    
+    N_sol = bgsol.t
+    H_sol = bgsol.y[0]
+    phi_sol = bgsol.y[1]
+    psi_sol = bgsol.y[2]
+    dphi_sol = psi_sol
+
+    H_int = interp1d(N_sol,H_sol, kind='linear', fill_value="extrapolate") # Interpolación lineal de los datos
+
+    dH_sol, dphi_sol2, dpsi_sol = bgeqs_JM(N_sol, np.array([H_sol, phi_sol, psi_sol])) #[0] derivada de H,
+    ddphi_sol = dpsi_sol  # Segunda derivada del Campo escalar
+    dH_H = dH_sol/H_sol  #Consiente entre la derivada de H y H
+    ddphi = -(dH_H + 3.)*dphi_sol - dV(phi_sol,beta,phi_step,delta[j],nv)/H_sol**2  # Klein GOrdon para \phi
+
+#################################################################################################################
+#################################################################################################################
+
+
+    a=np.exp(N_sol)
+    a_int=interp1d(N_sol,a, kind='linear', fill_value="extrapolate")
+    dda_a=(2.+dH_H)
+
+    p_phi = 0.5*(H_sol*dphi_sol)**2 - V(phi_sol,beta,phi_step,delta[j],nv)
+    rho_phi = 0.5*(H_sol*dphi_sol)**2 + V(phi_sol,beta,phi_step,delta[j],nv)
+
+
+    z =  np.exp(N_sol)*dphi_sol
+    z_int = interp1d(N_sol, z, kind='linear', fill_value="extrapolate")
+    z_v2 = -np.exp(N_sol)*np.sqrt(-2.*dH_H)
+
+    ddz_z = (2. - 5.*dH_H - 2.*(dH_H)**2. - 4.*(dH_H/dphi_sol)*ddphi - ddV(phi_sol,beta,phi_step,delta[j],nv)/H_sol**2.)
+
+    
+    
+    
+    """ Está parte de código guarda la evolución de los parámetros del fondo cosmológico (H,phi, epsilon, etc.)
+    
+    df_hea=["k","$\phi_{step}=7.3$","$\phi_{step}=7.325$","$\phi_{step}=7.35$","$\phi_{step}=7.375$","$\phi_{step}=7.4$","$\phi_{step}=7.425$","$\phi_{step}=7.45$","$\phi_{step}=7.475$","$\phi_{step}=7.5$","$\phi_{step}=7.525$","$\phi_{step}=7.55$"]
+    
+    
+    Hubble=np.zeros(shape=(len(N_sol),7),dtype=float,order='F')
+    
+    df_hea1=["N","H","R","P","PN","E","Z"]
+
+    for i in range(len(N_sol)):
+        Hubble[i][0]=N_sol[i]
+        Hubble[i][1]=H_sol[i]
+        Hubble[i][2]=(np.exp(N_sol[i]) *H_sol[i])**(-1)
+        Hubble[i][3]=phi_sol[i]
+        Hubble[i][4]=dphi_sol[i]
+        Hubble[i][5]=-dH_H[i]
+        Hubble[i][6]=ddz_z[i]
+    
+    
+    df_pd=pd.DataFrame(data=Hubble,dtype=float, columns=df_hea1)    
+
+    df_pd.to_csv(df_heaH[j],sep='\t',mode='w' )
+    
+    """
+    
+    
+    
+    plt.figure()
+    plt.plot(N_sol, -dH_H)
+    plt.xlabel('N')
+    plt.ylabel('$\epsilon$')
+    plt.show()
+    
+    ini= np.zeros_like(ks, dtype=int)
+    cross = np.zeros_like(ks, dtype=int)
+    end = np.zeros_like(ks, dtype=int)
+
+    endindex = 0
+    for i in range(len(ks)):
+        idx = (np.abs(ks[i] - 120.*np.exp(N_sol)*H_sol)).argmin()
+        ini[i] = idx
+        idx = (np.abs(ks[i] - np.exp(N_sol)*H_sol)).argmin()
+        cross[i] = idx  
+        idx = (np.abs(ks[i] - 0.01*np.exp(N_sol)*H_sol)).argmin()
+        end[i] = idx
+
+    
+    idx=0
+    k=ks[idx]
+    
+    
+    # Resuelve la ecuación de Mukhanov-Sasaki para las perturbaciones escalares
+    
+    for i,k in enumerate(ks):
+    
+    
+        gamma=0.5*(1.+dH_H)  # Primer coeficiente en la onda amortiguada
+    
+        omega2s = ( k**2./np.exp(2.*N_sol)/H_sol**2. -  ddz_z ) # Frecuencias.
+    
+        omegas = [np.sqrt(idx) if idx>0 else 1.j*np.sqrt(-idx) for idx in omega2s]
+    
+        #Condiciones para u y v
+        x03 = 1./np.sqrt(2.*k)
+        dx03 = -1.j*np.sqrt(k/2.)/np.exp(N_sol[ini[i]])/H_int(N_sol[ini[i]])
+    
+        sol3s= pyoscode.solve(N_sol, omegas , gamma, N_sol[ini[i]], N_sol[end[i]], x03, dx03, rtol=1e-10)
+    
+        nk3s = sol3s["t"]
+        uk3s = sol3s["sol"]
+        
+        scalar_spectrum[i][j]= np.abs(uk3s[-1]/z_int(N_sol[end[i]]))
+    """   
+    # Resuelve la ecuación de Mukhanov-Sasaki para las perturbaciones tensoriales
+    for i1,k1 in enumerate(ks):
+       
+        gammat=0.5*(1.+dH_H)  # Primer coeficiente en la onda amortiguada
+    
+        omega2t = ( k1**2./(a*H_sol)**2. -  dda_a ) # Frecuencias.
+    
+        omegat = [np.sqrt(idx) if idx>0 else 1.j*np.sqrt(-idx) for idx in omega2t]
+    
+        #Condiciones para u y v
+        x0 = 1./np.sqrt(2.*k1)
+        dx0 = -1.j*np.sqrt(k1/2.)/np.exp(N_sol[ini[i1]])/H_int(N_sol[ini[i1]])
+    
+    
+        sol3t = pyoscode.solve(N_sol, omegat , gammat, N_sol[ini[i1]], N_sol[end[i1]], x0, dx0, rtol=1e-10)
+    
+        nk3t = sol3t["t"]
+        uk3t= sol3t["sol"]
+
+        tensor_spectrum[i1][j]= np.abs(uk3t[-1]/a_int(N_sol[end[i1]]))"""
+        
+        
+
+    """  Esta parte guarda la evolución de los modos para el último k
+    
+    detap_s= np.abs(uk3s/z_int(nk3s))
+    detap_t= np.abs(uk3t/z_int(nk3t))
+            
+    
+    
+    df_heaHH=["modosstep1.txt","modosstep2.txt","modosstep3.txt","modosstep4.txt"]
+    modos=np.zeros(shape=(len(nk3s),3),dtype=float,order='F')
+    
+    df_hea11=["ns","us","dps"]
+    df_hea12=["nt","ut","dpt"]
+
+    for i in range(len(nk3s)):
+        modos[i][0]=nk3s[i].real
+        modos[i][1]=uk3s[i].real
+        modos[i][2]=detap_s[i].real
+
+        
+    
+    df_pd=pd.DataFrame(data=modos,dtype=float, columns=df_hea11)    
+
+    df_pd.to_csv(df_heaHH[j],sep='\t',mode='w' )
+    
+    
+    df_heaHHH=["modotstep1.txt","modotstep2.txt","modotstep3.txt","modotstep4.txt"]
+    modot=np.zeros(shape=(len(nk3t),3),dtype=float,order='F')
+    
+
+    for i in range(len(nk3t)):
+        
+        modot[i][0]=nk3t[i].real
+        modot[i][1]=uk3t[i].real
+        modot[i][2]=detap_t[i].real
+        
+    
+    df_pd=pd.DataFrame(data=modot,dtype=float, columns=df_hea12)    
+
+    df_pd.to_csv(df_heaHHH[j],sep='\t',mode='w' )
+    
+    
+    
+    H_prom=sum(H_sol)/len(H_sol)
+    Horizon=[]
+    for i in range(len(H_sol)):
+        if H_sol[i]*np.exp(N_sol[i])/ks[-1]>0.9999 and 1.0001>H_sol[i]*np.exp(N_sol[i])/ks[-1]:
+            horizon1= H_sol[i]*np.exp(N_sol[i])
+            horizon=np.log(k/H_sol[i])
+            Horizon.append(horizon)
+
+    print(Horizon)
+
+    Horizon_prom=sum(Horizon)/len(Horizon)
+    print(Horizon_prom)
+    print(k)
+    
+    horiss.append(Horizon_prom)
+    """ 
+
+----
+
+
++*Out[8]:*+
+----
+Resulst for phi23 sin paso: 
+ The number of efolds are: 61.5 
+ The number of e-folds of inflatio: 60.5
+765784
+
+![png](output_6_1.png)
+
+
+    ---------------------------------------------------------------------------
+
+    NameError                                 Traceback (most recent call last)
+
+    Cell In[8], line 147
+        144 x03 = 1./np.sqrt(2.*k)
+        145 dx03 = -1.j*np.sqrt(k/2.)/np.exp(N_sol[ini[i]])/H_int(N_sol[ini[i]])
+    --> 147 sol3s= pyoscode.solve(N_sol, omegas , gamma, N_sol[ini[i]], N_sol[end[i]], x03, dx03, rtol=1e-10)
+        149 nk3s = sol3s["t"]
+        150 uk3s = sol3s["sol"]
+    
+
+    NameError: name 'pyoscode' is not defined
+
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+A=ks**3./(2.*np.pi**2)  # en unidades de 1/mp  mp=masa de plank 2.4 e18 GeV
+nx = 2.
+fc1 = 1.6 * ks**3.
+
+
+A_s=(10**-10)*np.exp(3.040)
+A_t=A_s*0.11
+print(A_s)
+print(A_t)
+
+
+for i in range(len(ks)):
+    if ks[i]/0.05 > 0.9 and 1.01 > ks[i]/0.05:
+        print(ks[i])
+        i_pivote=i
+
+
+print(i_pivote)
+cte_s= np.zeros(len(delta))
+cte_t= np.zeros(len(delta))
+
+for j_ct in range(len(delta)):
+
+    cte_s[j_ct]=A_s/(A[i_pivote]*scalar_spectrum[i_pivote][j_ct]**nx)
+    print(cte_s[j_ct]*A[i_pivote]*scalar_spectrum[i_pivote][j_ct]**nx)
+    
+    cte_t[j_ct]=A_t/(A[i_pivote]*tensor_spectrum[i_pivote][j_ct]**nx)
+    print(cte_t[j_ct]*A[i_pivote]*tensor_spectrum[i_pivote][j_ct]**nx)
+
+
+
+print(cte_s)
+
+print(cte_t)
+
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+nombres2=["$\phi_{step}=7.3$","$\phi_{step}=7.38$","$\phi_{step}=7.47$","$\phi_{step}=7.55$","$\phi_{step}=7.4$","$\phi_{step}=7.425$","$\phi_{step}=7.45$","$\phi_{step}=7.475$","$\phi_{step}=7.5$","$\phi_{step}=7.525$","$\phi_{step}=7.55$"]
+
+fig, ax = plt.subplots()
+for j in range(len(delta)):
+    ax.plot(ks,cte_s[j]*A* scalar_spectrum[:,j]**nx ,label=name_delta2[j])
+#plt.title('Scalar primordial power espectrum for $\phi^{2/3}$')
+#plt.vlines(10, 1e-12, 1e-7, color='k', linestyle=':',label='$k=10$')
+#plt.vlines(1e4, 1e-12, 1e-7, color='k', linestyle=':',label='$k=10^4$')
+ax.axvline(x=10, color='k', linestyle=':', label=r'$ k=10$')
+ax.axvline(x=10e4, color='b', linestyle=':', label=r'$ k=10^4$')
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel(r'$k/Mpc^{-1}$')
+plt.ylabel('$P_R(k)$')
+#ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+plt.legend()
+#plt.savefig("variacion_phi_step_tes.png", dpi=200)
+plt.show()
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+fig, ax = plt.subplots()
+for j in range(len(delta)):
+    ax.plot(phi_t,V(phi_t,beta,phi_step,delta[j],nv), label=name_delta2[j])
+ax.plot(phi_t,V(phi_t,0,phi_step,delta[1],nv),'k', label=r'$V_0$')
+ax.axvline(x=7.43, color='k', linestyle=':', label=r'$ \phi_{\rm step}=7.43$')
+plt.xlabel(r'$ \phi/{\rm M_{pl}}$')
+plt.ylabel(r'$ V(\phi)$')
+plt.legend(loc='upper left', prop={'size': 9})
+ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+plt.savefig('delta_potential.png',dpi=300)
+plt.show()
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+for j in range(0,len(phi_step),3):
+    plt.plot(ks,cte_s[j]*A* scalar_spectrum[:,j]**nx ,label=nombres2[j])
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('k')
+    plt.ylabel('$P_R$')
+    plt.legend()
+    plt.show()
+    
+for j in range(0,len(phi_step),3):
+    plt.plot(ks,cte_s[j]*A* scalar_spectrum[:,j]**nx ,label=nombres2[j])
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('k')
+plt.ylabel('$P_R$')
+plt.legend()
+plt.show()
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+for j in range(len(phi_step)):
+    plt.plot(ks,cte_t[j]*A* tensor_spectrum[:,j]**nx ,label=nombres2[j])
+#plt.title('tensor primordial power espectrum for $\phi^{2/3}$')
+#plt.vlines(10, 1.6e-10, 2.5e-10, color='k', linestyle=':',label='$k=10$')
+#plt.vlines(1e4, 1.6e-10, 2.5e-10, color='k', linestyle=':',label='$k=10^4$')
+plt.xscale('log')
+#plt.yscale('log')
+plt.xlabel(r'$k(Mpc^{-1})$')
+plt.ylabel('$P_t(k)$')
+plt.legend()
+#plt.savefig("variacion_phi_step_ten.png", dpi=200)
+plt.show()
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+r=np.zeros(shape=(len(ks),len(phi_step)),dtype=float,order='F' )
+for j in range(len(phi_step)):
+    for i in range(len(ks)):
+        r[i][j]=(cte_t[j]*A[i]* tensor_spectrum[i][j]**nx)/(cte_s[j]*A[i]* scalar_spectrum[i][j]**nx)
+
+
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+for j in range(len(phi_step)):
+    plt.plot(ks,r[:,j] ,label=nombres2[j])
+#plt.title('tensor primordial power espectrum for $\phi^{2/3}$')
+#plt.vlines(10, 1.6e-10, 2.5e-10, color='k', linestyle=':',label='$k=10$')
+#plt.vlines(1e4, 1.6e-10, 2.5e-10, color='k', linestyle=':',label='$k=10^4$')
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel(r'$k(Mpc^{-1})$')
+plt.ylabel('$r(k)$')
+plt.legend()
+#plt.savefig("variacion_phi_step_r.png", dpi=200)
+plt.show()
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+#Esta parte guarda los espectros de potencia primordial escaleres
+
+"""
+df_hea=["k","$\phi_{step}=7.3$","$\phi_{step}=7.325$","$\phi_{step}=7.35$","$\phi_{step}=7.375$","$\phi_{step}=7.4$","$\phi_{step}=7.425$","$\phi_{step}=7.45$","$\phi_{step}=7.475$","$\phi_{step}=7.5$","$\phi_{step}=7.525$","$\phi_{step}=7.55$"]
+archivo=np.zeros(shape=(len(ks),12),dtype=float,order='F')
+
+for i in range(len(ks)):
+    archivo[i][0]=ks[i]
+    for t in range(len(phi_step)):
+        archivo[i][t+1]=cte_s[t]*A[i]*scalar_spectrum[i][t]**nx
+    
+    
+df_pd=pd.DataFrame(data=archivo,dtype=float, columns=df_hea)    
+
+df_pd.to_csv("Vstep_variacion_phi_step.txt",sep='\t',mode='w' )
+
+"""
+----
+
+
++*In[ ]:*+
+[source, ipython3]
+----
+
+----
